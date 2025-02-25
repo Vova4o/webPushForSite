@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Web Push Demo</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 30px auto;
+        padding: 20px;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      #status {
+        margin-top: 10px;
+        padding: 10px;
+        display: none;
+      }
+      .success {
+        background-color: #dff0d8;
+        color: #3c763d;
+      }
+      .error {
+        background-color: #f2dede;
+        color: #a94442;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Демо Web Push уведомлений</h1>
+    <button id="subscribe-button">Подписаться на уведомления</button>
+    <div id="status"></div>
+    <script>
+      // Проверяем регистрацию Service Worker при загрузке
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker
+          .register("/service-worker.js")
+          .then(async (registration) => {
+            console.log("Service Worker зарегистрирован:", registration);
+
+            // Проверяем статус
+            if (registration.active) {
+              console.log("Service Worker активен");
+            } else if (registration.installing) {
+              console.log("Service Worker устанавливается");
+              registration.installing.addEventListener("statechange", (e) => {
+                console.log("Новый статус SW:", e.target.state);
+              });
+            }
+
+            // Отправляем тестовое сообщение
+            if (registration.active) {
+              registration.active.postMessage({
+                type: "TEST",
+                message: "Проверка связи с Service Worker",
+              });
+            }
+          })
+          .catch((error) => {
+            console.error("Ошибка регистрации Service Worker:", error);
+          });
+      }
+    </script>
+    <script src="/js/push-client.js"></script>
+  </body>
+</html>

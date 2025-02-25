@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Тест уведомлений</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <style>
+      body {
+        padding: 20px;
+        font-family: Arial, sans-serif;
+      }
+      textarea {
+        width: 100%;
+        height: 100px;
+        margin-bottom: 10px;
+      }
+      #result {
+        margin-top: 20px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        display: none;
+      }
+      .success {
+        background-color: #dff0d8;
+        color: #3c763d;
+      }
+      .error {
+        background-color: #f2dede;
+        color: #a94442;
+      }
+      #debug {
+        margin-top: 20px;
+        padding: 10px;
+        background: #f8f9fa;
+        border: 1px solid #ddd;
+        font-family: monospace;
+      }
+      button {
+        padding: 10px 20px;
+      }
+      #status {
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Тестирование Web Push</h1>
+    <button onclick="testNotification()">Отправить тестовое уведомление</button>
+    <div id="status"></div>
+    <h2>Тест отправки уведомлений</h2>
+    <form id="notification-form">
+      <p>
+        <label
+          >Заголовок:<br />
+          <input type="text" id="title" value="Тестовое уведомление"
+        /></label>
+      </p>
+      <p>
+        <label
+          >Текст:<br />
+          <textarea id="body">Это тестовое push-уведомление</textarea>
+        </label>
+      </p>
+      <p>
+        <label
+          >URL:<br />
+          <input type="text" id="url" value="https://example.com"
+        /></label>
+      </p>
+      <button type="submit">Отправить уведомление</button>
+    </form>
+    <div id="result"></div>
+    <div id="debug"></div>
+
+    <script>
+      const debug = document.getElementById("debug");
+      const result = document.getElementById("result");
+
+      function log(message, data = null) {
+        const time = new Date().toLocaleTimeString();
+        debug.innerHTML += `<div>[${time}] ${message}</div>`;
+        if (data) {
+          debug.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+        console.log(message, data);
+      }
+
+      function showResult(message, isError = false) {
+        result.textContent = message;
+        result.className = isError ? "error" : "success";
+        result.style.display = "block";
+      }
+
+      // Проверяем поддержку уведомлений при загрузке
+      document.addEventListener("DOMContentLoaded", async () => {
+        if (!("Notification" in window)) {
+          log("Уведомления не поддерживаются");
+          return;
+        }
+
+        log("Текущий статус разрешения:", Notification.permission);
+
+        if ("serviceWorker" in navigator) {
+          try {
+            const registration =
+              await navigator.serviceWorker.getRegistration();
+            if (registration) {
+              const subscription =
+                await registration.pushManager.getSubscription();
+              log("Текущая подписка:", subscription);
+            }
+          } catch (error) {
+            log("Ошибка проверки SW:", error);
+          }
+        }
+      });
+
+      document.getElementById("notification-form").onsubmit = async (e) => {
+        e.preventDefault();
+        log("Отправка уведомления...");
+
+        try {
+          const payload = {
+            title: document.getElementById("title").value,
+            body: document.getElementById("body").value,
+            url: document.getElementById("url").value,
+          };
+
+          log("Отправляемые данные:", payload);
+
+          const response = await fetch("/api/send-notification", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          const data = await response.json();
+          log("Ответ сервера:", data);
+
+          showResult(`Отправлено: ${data.succeeded}, Ошибок: ${data.failed}`);
+        } catch (error) {
+          log("Ошибка отправки:", error);
+          showResult(`Ошибка: ${error.message}`, true);
+        }
+      };
+
+      async function testNotification() {
+        const status = document.getElementById("status");
+        try {
+          const response = await fetch("/test-notification");
+          if (!response.ok) {
+            throw new Error(await response.text());
+          }
+          status.textContent = "Уведомление отправлено!";
+        } catch (error) {
+          status.textContent = "Ошибка: " + error.message;
+        }
+      }
+    </script>
+  </body>
+</html>
