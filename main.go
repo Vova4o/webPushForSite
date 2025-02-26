@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -10,10 +11,22 @@ import (
 	"github.com/Vova4o/webpushnotification/webpushforsite"
 )
 
-// Структура для хранения подписчиков в памяти
+// SubscriptionStore хранит подписки на уведомления
 type SubscriptionStore struct {
 	sync.RWMutex
 	subscribers []webpushforsite.Subscription
+}
+
+// Добавляем функцию получения IP-адреса
+func getOutboundIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
 }
 
 func main() {
@@ -121,10 +134,15 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
+	// Получаем IP-адрес
+	serverIP := getOutboundIP()
+
 	// Раздача статических файлов
 	fs := http.FileServer(http.Dir("static"))
 	http.Handle("/", fs)
 
-	log.Printf("Сервер запущен на http://localhost:8080")
+	// Запускаем сервер на порту 8080
+	serverAddr := serverIP + ":8080"
+	log.Printf("Сервер запущен на http://%s", serverAddr)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
