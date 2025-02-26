@@ -1,160 +1,335 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Тест уведомлений</title>
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <title>Отладка Push-уведомлений</title>
+    <meta charset="utf-8" />
     <style>
       body {
-        padding: 20px;
         font-family: Arial, sans-serif;
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
       }
-      textarea {
-        width: 100%;
-        height: 100px;
-        margin-bottom: 10px;
-      }
-      #result {
-        margin-top: 20px;
+      .debug {
+        background: #f5f5f5;
         padding: 10px;
-        border: 1px solid #ddd;
-        display: none;
-      }
-      .success {
-        background-color: #dff0d8;
-        color: #3c763d;
+        border-radius: 4px;
+        margin: 10px 0;
+        max-height: 300px;
+        overflow: auto;
       }
       .error {
-        background-color: #f2dede;
-        color: #a94442;
+        color: red;
       }
-      #debug {
-        margin-top: 20px;
-        padding: 10px;
-        background: #f8f9fa;
-        border: 1px solid #ddd;
-        font-family: monospace;
+      .success {
+        color: green;
+      }
+      h1 {
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 10px;
       }
       button {
-        padding: 10px 20px;
+        background: #4285f4;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        margin: 5px;
+        border-radius: 4px;
+        cursor: pointer;
       }
-      #status {
-        margin-top: 10px;
+      button:hover {
+        background: #3367d6;
+      }
+      pre {
+        white-space: pre-wrap;
       }
     </style>
   </head>
   <body>
-    <h1>Тестирование Web Push</h1>
-    <button onclick="testNotification()">Отправить тестовое уведомление</button>
-    <div id="status"></div>
-    <h2>Тест отправки уведомлений</h2>
-    <form id="notification-form">
-      <p>
-        <label
-          >Заголовок:<br />
-          <input type="text" id="title" value="Тестовое уведомление"
-        /></label>
-      </p>
-      <p>
-        <label
-          >Текст:<br />
-          <textarea id="body">Это тестовое push-уведомление</textarea>
-        </label>
-      </p>
-      <p>
-        <label
-          >URL:<br />
-          <input type="text" id="url" value="https://example.com"
-        /></label>
-      </p>
-      <button type="submit">Отправить уведомление</button>
-    </form>
-    <div id="result"></div>
-    <div id="debug"></div>
+    <h1>Отладка Push-уведомлений</h1>
+
+    <div class="debug" id="debug">Загрузка...</div>
+
+    <div>
+      <button onclick="checkServiceWorker()">
+        1. Проверить Service Worker
+      </button>
+      <button onclick="checkPermission()">2. Проверить разрешения</button>
+      <button onclick="requestPermission()">3. Запросить разрешение</button>
+      <button onclick="checkSubscription()">4. Проверить подписку</button>
+      <button onclick="subscribeTest()">5. Создать подписку</button>
+      <button onclick="testNotification()">
+        6. Тест уведомления через API
+      </button>
+      <button onclick="testDirectNotification()">
+        7. Прямой тест уведомлений
+      </button>
+    </div>
 
     <script>
       const debug = document.getElementById("debug");
-      const result = document.getElementById("result");
 
-      function log(message, data = null) {
-        const time = new Date().toLocaleTimeString();
-        debug.innerHTML += `<div>[${time}] ${message}</div>`;
+      // Очищаем старые логи
+      debug.innerHTML = "Журнал отладки:<br>";
+
+      function log(message, data) {
+        const timestamp = new Date().toTimeString().split(" ")[0];
+        let text = `[${timestamp}] ${message}`;
+
         if (data) {
-          debug.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-        }
-        console.log(message, data);
-      }
-
-      function showResult(message, isError = false) {
-        result.textContent = message;
-        result.className = isError ? "error" : "success";
-        result.style.display = "block";
-      }
-
-      // Проверяем поддержку уведомлений при загрузке
-      document.addEventListener("DOMContentLoaded", async () => {
-        if (!("Notification" in window)) {
-          log("Уведомления не поддерживаются");
-          return;
-        }
-
-        log("Текущий статус разрешения:", Notification.permission);
-
-        if ("serviceWorker" in navigator) {
-          try {
-            const registration =
-              await navigator.serviceWorker.getRegistration();
-            if (registration) {
-              const subscription =
-                await registration.pushManager.getSubscription();
-              log("Текущая подписка:", subscription);
-            }
-          } catch (error) {
-            log("Ошибка проверки SW:", error);
+          if (typeof data === "object") {
+            text += `<br><pre>${JSON.stringify(data, null, 2)}</pre>`;
+          } else {
+            text += `<br>${data}`;
           }
         }
-      });
 
-      document.getElementById("notification-form").onsubmit = async (e) => {
-        e.preventDefault();
-        log("Отправка уведомления...");
+        debug.innerHTML += `<div>${text}</div>`;
+        console.log(message, data || "");
+      }
 
+      function logError(message, error) {
+        const timestamp = new Date().toTimeString().split(" ")[0];
+        let text = `[${timestamp}] <span class="error">ОШИБКА: ${message}</span>`;
+
+        if (error) {
+          text += `<br>${error.message || error}`;
+          console.error(error);
+        }
+
+        debug.innerHTML += `<div>${text}</div>`;
+        console.error(message, error || "");
+      }
+
+      function logSuccess(message) {
+        const timestamp = new Date().toTimeString().split(" ")[0];
+        debug.innerHTML += `<div>[${timestamp}] <span class="success">${message}</span></div>`;
+        console.log("%c" + message, "color: green");
+      }
+
+      async function checkServiceWorker() {
         try {
-          const payload = {
-            title: document.getElementById("title").value,
-            body: document.getElementById("body").value,
-            url: document.getElementById("url").value,
-          };
+          if (!("serviceWorker" in navigator)) {
+            logError("Service Worker не поддерживается");
+            return;
+          }
 
-          log("Отправляемые данные:", payload);
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (!registration) {
+            log("Service Worker не зарегистрирован");
+          } else {
+            logSuccess(
+              `Service Worker: ${
+                registration.active ? "активен" : "не активен"
+              }`
+            );
 
-          const response = await fetch("/api/send-notification", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            // Отправим сообщение в SW для проверки связи
+            if (registration.active) {
+              registration.active.postMessage({
+                type: "PING",
+                message: "Проверка связи",
+              });
+              log("Отправлено тестовое сообщение в Service Worker");
+            }
+          }
+        } catch (error) {
+          logError("Ошибка проверки Service Worker", error);
+        }
+      }
+
+      async function checkPermission() {
+        try {
+          const status = Notification.permission;
+          log(`Текущий статус разрешений: ${status}`);
+
+          if (status === "denied") {
+            logError(
+              "Уведомления заблокированы. Разрешите их в настройках браузера."
+            );
+          } else if (status === "granted") {
+            logSuccess("Разрешение на уведомления предоставлено");
+          } else {
+            log("Требуется запросить разрешение");
+          }
+        } catch (error) {
+          logError("Ошибка проверки разрешений", error);
+        }
+      }
+
+      async function requestPermission() {
+        try {
+          const permission = await Notification.requestPermission();
+          log(`Результат запроса разрешения: ${permission}`);
+
+          if (permission === "granted") {
+            logSuccess("Разрешение получено");
+          } else {
+            logError("Разрешение не предоставлено");
+          }
+        } catch (error) {
+          logError("Ошибка запроса разрешения", error);
+        }
+      }
+
+      async function checkSubscription() {
+        try {
+          if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+            logError("Web Push API не поддерживается");
+            return;
+          }
+
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (!registration) {
+            logError("Service Worker не зарегистрирован");
+            return;
+          }
+
+          const subscription = await registration.pushManager.getSubscription();
+          if (subscription) {
+            logSuccess("Подписка существует");
+            log("Детали подписки:", subscription.toJSON());
+          } else {
+            log("Подписка не найдена");
+          }
+        } catch (error) {
+          logError("Ошибка проверки подписки", error);
+        }
+      }
+
+      function urlBase64ToUint8Array(base64String) {
+        const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding)
+          .replace(/-/g, "+")
+          .replace(/_/g, "/");
+
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+
+        for (let i = 0; i < rawData.length; ++i) {
+          outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+      }
+
+      async function subscribeTest() {
+        try {
+          if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+            logError("Web Push API не поддерживается");
+            return;
+          }
+
+          log("Регистрация Service Worker...");
+          const registration = await navigator.serviceWorker.register(
+            "/service-worker.js"
+          );
+          log("Service Worker зарегистрирован");
+
+          // Запрашиваем разрешение если нужно
+          if (Notification.permission !== "granted") {
+            const permission = await Notification.requestPermission();
+            if (permission !== "granted") {
+              logError("Необходимо разрешить уведомления");
+              return;
+            }
+          }
+
+          // Получаем публичный ключ
+          log("Запрашиваем публичный ключ...");
+          const response = await fetch("/api/push-key");
+          const data = await response.json();
+          log("Получен публичный ключ:", data.publicKey);
+
+          // Проверяем существующую подписку
+          const existingSub = await registration.pushManager.getSubscription();
+          if (existingSub) {
+            log("Удаляем существующую подписку");
+            await existingSub.unsubscribe();
+          }
+
+          // Подписываемся
+          log("Создаем новую подписку...");
+          const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(data.publicKey),
           });
 
-          const data = await response.json();
-          log("Ответ сервера:", data);
+          logSuccess("Подписка создана");
+          log("Детали подписки:", subscription.toJSON());
 
-          showResult(`Отправлено: ${data.succeeded}, Ошибок: ${data.failed}`);
+          // Отправляем на сервер
+          log("Отправляем подписку на сервер...");
+          const subscribeResponse = await fetch("/api/subscribe", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(subscription),
+          });
+
+          if (subscribeResponse.ok) {
+            logSuccess("Подписка успешно сохранена на сервере");
+          } else {
+            logError(
+              "Ошибка сохранения подписки",
+              await subscribeResponse.text()
+            );
+          }
         } catch (error) {
-          log("Ошибка отправки:", error);
-          showResult(`Ошибка: ${error.message}`, true);
+          logError("Ошибка подписки", error);
         }
-      };
+      }
 
       async function testNotification() {
-        const status = document.getElementById("status");
         try {
+          log("Отправка тестового уведомления через API...");
+
           const response = await fetch("/test-notification");
           if (!response.ok) {
             throw new Error(await response.text());
           }
-          status.textContent = "Уведомление отправлено!";
+
+          logSuccess(
+            "Запрос отправлен успешно. Проверьте системные уведомления."
+          );
         } catch (error) {
-          status.textContent = "Ошибка: " + error.message;
+          logError("Ошибка отправки тестового уведомления", error);
         }
       }
+
+      async function testDirectNotification() {
+        try {
+          if (Notification.permission !== "granted") {
+            const permission = await Notification.requestPermission();
+            if (permission !== "granted") {
+              logError("Необходимо разрешить уведомления");
+              return;
+            }
+          }
+
+          log("Отправка прямого уведомления из браузера...");
+
+          const notification = new Notification("Тестовое прямое уведомление", {
+            body: "Это уведомление отправлено напрямую из браузера без Service Worker",
+            icon: "/icon.png",
+            requireInteraction: true,
+          });
+
+          notification.onclick = () => {
+            log("Клик по прямому уведомлению");
+            notification.close();
+            window.focus();
+          };
+
+          logSuccess("Прямое уведомление отправлено успешно");
+        } catch (error) {
+          logError("Ошибка отправки прямого уведомления", error);
+        }
+      }
+
+      // Запускаем базовые проверки при загрузке
+      checkServiceWorker();
+      checkPermission();
     </script>
   </body>
 </html>

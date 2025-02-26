@@ -1,13 +1,9 @@
 package webpushforsite
 
 import (
-	"bytes"
-	"crypto/ecdh"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
-	"net/http"
-	"time"
+
+	"github.com/SherClockHolmes/webpush-go"
 )
 
 // Subscription содержит данные подписки браузера
@@ -32,61 +28,59 @@ type Message struct {
 
 // Client для отправки web push уведомлений
 type Client struct {
-	privateKey *ecdh.PrivateKey
-	publicKey  []byte
-	subject    string // обычно это URL вашего сайта
+	vapidPublicKey  string
+	vapidPrivateKey string
+	subject         string // обычно это URL вашего сайта
 }
 
 // NewClient создает новый клиент для отправки уведомлений
 func NewClient(subject string) (*Client, error) {
-	curve := ecdh.P256()
-	privateKey, err := curve.GenerateKey(rand.Reader)
+	// Генерируем VAPID ключи
+	privateKey, publicKey, err := webpush.GenerateVAPIDKeys()
 	if err != nil {
 		return nil, err
 	}
 
-	publicKey := privateKey.PublicKey().Bytes()
-
 	return &Client{
-		privateKey: privateKey,
-		publicKey:  publicKey,
-		subject:    subject,
+		vapidPublicKey:  publicKey,
+		vapidPrivateKey: privateKey,
+		subject:         subject,
 	}, nil
 }
 
 // SendNotification отправляет push-уведомление подписчику
-func (c *Client) SendNotification(subscription *Subscription, message *Message) error {
-	payload, err := json.Marshal(message)
+func (c *Client) SendNotification(sub *Subscription, msg *Message) error {
+	// Преобразуем нашу подписку в формат библиотеки
+	s := webpush.Subscription{
+		Endpoint: sub.Endpoint,
+		Keys: webpush.Keys{
+			P256dh: sub.Keys.P256dh,
+			Auth:   sub.Keys.Auth,
+		},
+	}
+
+	// Преобразуем сообщение в JSON
+	payload, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
 
-	// Создаем HTTP клиент с таймаутом
-	client := &http.Client{
-		Timeout: time.Second * 30,
-	}
+	// Отправляем уведомление
+	_, err = webpush.SendNotification(
+		payload,
+		&s,
+		&webpush.Options{
+			VAPIDPublicKey:  c.vapidPublicKey,
+			VAPIDPrivateKey: c.vapidPrivateKey,
+			TTL:             30,
+			Subscriber:      c.subject,
+		},
+	)
 
-	// Создаем запрос
-	req, err := http.NewRequest("POST", subscription.Endpoint, bytes.NewReader(payload))
-	if err != nil {
-		return err
-	}
-
-	// Добавляем необходимые заголовки
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("TTL", "180") // время жизни уведомления в секундах
-
-	// Отправляем запрос
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	return nil
+	return err
 }
 
 // GetPublicKey возвращает публичный ключ в формате base64url
 func (c *Client) GetPublicKey() string {
-	return base64.URLEncoding.EncodeToString(c.publicKey)
+	return c.vapidPublicKey
 }

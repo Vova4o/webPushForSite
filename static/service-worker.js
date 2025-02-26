@@ -1,47 +1,66 @@
 self.addEventListener("install", (event) => {
-  console.log("[SW] Установка Service Worker");
+  console.log("[Service Worker] Установка");
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  console.log("[SW] Service Worker активирован");
-  event.waitUntil(clients.claim());
+  console.log("[Service Worker] Активация");
+  event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener("push", (event) => {
-  console.log("[SW] Push событие получено", event);
+  console.log("[Service Worker] Push событие получено", event);
 
-  let payload;
+  let data;
   try {
-    payload = event.data.json();
-    console.log("[SW] Данные уведомления:", payload);
-  } catch (err) {
-    payload = {
+    const text = event.data.text();
+    console.log("[Service Worker] Получены данные:", text);
+    data = JSON.parse(text);
+  } catch (e) {
+    console.error("[Service Worker] Ошибка разбора данных:", e);
+    data = {
       title: "Новое уведомление",
-      body: event.data ? event.data.text() : "Нет данных",
+      body: "Получено уведомление без данных",
     };
-    console.error("[SW] Ошибка разбора данных:", err);
   }
 
-  const notificationPromise = self.registration.showNotification(
-    payload.title,
-    {
-      body: payload.body,
-      icon: "/icon.png",
-      data: payload,
-      requireInteraction: true,
-    }
-  );
+  const title = data.title || "Уведомление";
+  const options = {
+    body: data.body || "Пришло новое уведомление",
+    icon: "/icon.png",
+    badge: "/badge.png",
+    data: {
+      url: data.url || "/",
+    },
+    requireInteraction: true,
+    vibrate: [100, 50, 100],
+  };
 
-  event.waitUntil(notificationPromise);
+  console.log("[Service Worker] Показываем уведомление:", { title, options });
+
+  event.waitUntil(
+    self.registration
+      .showNotification(title, options)
+      .then(() => console.log("[Service Worker] Уведомление показано"))
+      .catch((error) =>
+        console.error("[Service Worker] Ошибка показа уведомления:", error)
+      )
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
-  console.log("[SW] Клик по уведомлению", event);
+  console.log("[Service Worker] Клик по уведомлению", event);
   event.notification.close();
 
-  const url = event.notification.data.url || "/";
-  event.waitUntil(clients.openWindow(url));
+  const url = (event.notification.data && event.notification.data.url) || "/";
+
+  event.waitUntil(
+    clients.openWindow(url).then((windowClient) => {
+      if (windowClient) {
+        return windowClient.focus();
+      }
+    })
+  );
 });
 
 // Добавляем обработчик для отладки

@@ -72,6 +72,19 @@ func main() {
 
 		for i, sub := range store.subscribers {
 			log.Printf("Отправка уведомления подписчику %d: %+v", i, sub)
+
+			// Проверка валидности подписки
+			if sub.Endpoint == "" {
+				log.Printf("Ошибка: пустой endpoint для подписчика %d", i)
+				failedCount++
+				continue
+			}
+
+			// Логирование данных для отправки
+			jsonData, _ := json.Marshal(message)
+			log.Printf("Отправляемые данные: %s", string(jsonData))
+
+			// Отправка с детальным логированием
 			if err := client.SendNotification(&sub, &message); err != nil {
 				log.Printf("Ошибка отправки уведомления: %v", err)
 				failedCount++
