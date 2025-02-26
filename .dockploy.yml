@@ -1,0 +1,7 @@
+version: "1"
+containers:
+  - name: webpush
+    image: webpush-app
+    ports:
+      - "8080:8080"
+    restart: always
